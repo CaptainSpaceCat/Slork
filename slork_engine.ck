@@ -1,41 +1,83 @@
 1::second => now;
 
-SqrOsc s;
+PulseOsc s3;
+SawOsc s2;
+TriOsc s1;
+SawOsc s_acc => NRev r_acc;
+0.12 => r_acc.mix;
 JCRev rs[5];
+Gain node;
+0 => node.gain;
+s1 => node;
 
 for (int i; i < 5; i++) {
-    rs[i] => dac.chan(i+1);
-    0.2 => r.mix;
+    rs[i] => dac.chan(i);
+    0.12 => rs[i].mix;
 }
 
-0 => s.gain;
 
-
-90 => float base_freq => float curr_freq;
-0 => float offset_freq;
+90 => float curr_freq;
+0 => float goal_freq;
 2 => float distortion;
 0 => float curr_gain;
+0 => int curr_mode;
 
 100::ms => dur beat_length;
 0.5 => float bip_percent;
 
 0 => int curr_chan;
 function void bip() {
-	s =< rs[curr_chan];
-	curr_chan++;
-	5 %=> curr_chan;
-	s => rs[curr_chan];
-    curr_gain => s.gain;
-    Math.random2f(-distortion,distortion) + curr_freq => s.freq;
+    
+    node =< rs[curr_chan];
+    curr_chan++;
+    5 %=> curr_chan;
+    node => rs[curr_chan];
+    Math.random2f(-0.02,0.02) + curr_gain => node.gain;
+    
+    Math.random2f(-distortion,distortion) + curr_freq => s1.freq;
+    Math.random2f(-distortion,distortion) + curr_freq => s2.freq;
+    Math.random2f(-distortion,distortion) + curr_freq => s3.freq;
     
     bip_percent * beat_length => now;
     
-    0 => s.gain;
+    0 => node.gain;
+}
+
+fun void accompany() {
+    r_acc => dac.chan(5);
+    0 => int o;
+    scale_frequency(155.56, o) => s_acc.freq;
+    for (int i; i < 100; i++) {
+        i/100.0 => float p;
+        p * curr_gain => s_acc.gain;
+        20::ms => now;
+    }
+    while(mode == 1) {
+        o++;
+        2 %=> o;
+        scale_frequency(155.56, o) => s_acc.freq;
+        for (int i; i < 100; i++) {
+            curr_gain => s_acc.gain;
+            20::ms => now;
+        }
+    }
+    for (int i; i < 100; i++) {
+        (100-i)/100.0 => float p;
+        p * curr_gain => s_acc.gain;
+        40::ms => now;
+    }
+    r_acc =< dac.chan(5);
+}
+
+fun float scale_frequency(float base, int offset) {
+    [0, 2, 4, 5, 7, 9, 11, 12] @=> int deltas[];
+    //base 174.61
+    return base*Math.pow(2, deltas[offset]/12.0);
 }
 
 
 // z axis deadzone
-0 => float DEADZONE;
+0.05 => float DEADZONE;
 
 // which joystick
 0 => int device;
@@ -62,6 +104,7 @@ class GameTrak
     // previous axis data
     float lastAxis[6];
     // current axis data
+    
     float axis[6];
 }
 
@@ -73,27 +116,29 @@ GameTrak gt;
 spork ~ gametrak();
 // print
 spork ~ print();
+// frequency following
+spork ~ freq_follow();
+
+fun void freq_follow() {
+    while (true) {
+        if (curr_freq < goal_freq) {
+            if (Math.random2(0, 3) == 0) {
+                3 +=> curr_freq;
+            }
+        } else {
+            if (Math.random2(0, 1) == 0) {
+                3 -=> curr_freq;
+            }
+        }
+        50::ms => now;
+    }
+}
 
 // main loop
 while( true )
 {
-    base_freq + offset_freq => curr_freq;
     bip();
     (1 - bip_percent) * beat_length => now;
-    
-    if (Math.random2(0,3) == 0) {
-        //1 +=> offset_freq;
-        /*
-        NOTE:
-        could have RY axis be current goal freq, and have it always randomly move up towards it
-        but if we get too large, just instantly drop down, this way it wont go too high
-        and also if i pull the clitch back it instantly drops
-        */
-    }
-    
-    if (Math.random2(0,100) == 0) {
-        //0 => offset_freq;
-    }
 }
 
 fun float lerp(float d_min, float d_max, float r_min, float r_max, float v) {
@@ -101,47 +146,71 @@ fun float lerp(float d_min, float d_max, float r_min, float r_max, float v) {
     return p * (r_max - r_min) + r_min;
 }
 
-fun void clamp(float d_min, float d_max, float v) {
-	if (v < d_min) {
-		return d_min;
-	}
-	if (v > d_max) {
-		return d_max;
-	}
-	return v;
+fun float clamp(float d_min, float d_max, float v) {
+    if (v < d_min) {
+        return d_min;
+    }
+    if (v > d_max) {
+        return d_max;
+    }
+    return v;
+}
+
+fun int buckets(float d_min, float d_max, int n_buckets, float v) {
+    v/(d_max-d_min) => float p;
+    return Math.floor(p*n_buckets) $ int;
 }
 
 // axis functions
 fun void LX(float val) { // distortion
-    lerp(-1, 1, 0, 20, val) => distortion;
+    lerp(-1, 1, 0, 30, val) => distortion;
 }
-fun void LY(float val) { // frequency
-    lerp(-1, 1, 0, 300, val) => offset_freq;
+int curr_gen;
+fun void LY(float val) { // timbre clutch
+    if (val < 0.3) {
+        if (curr_gen != 0) {
+            <<< "switching to s1" >>>;
+            0 => curr_gen;
+            s2 =< node;
+            s3 =< node;
+            s1 => node;
+        }
+    } else if (val < 0.6) {
+        if (curr_gen != 1) {
+            <<< "switching to s2" >>>;
+            1 => curr_gen;
+            s1 =< node;
+            s3 =< node;
+            s2 => node;
+        }
+    } else if (curr_gen != 2) {
+        <<< "switching to s3" >>>;
+        2 => curr_gen;
+        s1 =< node;
+        s2 =< node;
+        s3 => node;
+    }
 }
-fun void LZ(float val) { // gain
-    lerp(0, 1, 0, 2, val) => curr_gain;
+fun void LZ(float val) { // pitch
+    if (curr_mode == 0) {
+        lerp(-1, 1, 0, 600, val) => goal_freq;
+    } else {
+        scale_frequency(174.61, buckets(0, 0.5, 6, val)) => goal_freq;
+    }
 }
 fun void RX(float val) { // bip percent
-    lerp(-1, 1, 0, 1, val) => bip_percent;
+    lerp(-1, 1, -0.05, 1.05, val) => bip_percent;
+    clamp(0, 1, bip_percent) => bip_percent;
 }
 fun void RY(float val) { // beat length
-    lerp(-1, 1, 0, 200, val)::ms => beat_length;
+    lerp(-1, 1, 120, 1, val)::ms => beat_length;
 }
 fun void RZ(float val) {
+    lerp(0, 1, 0, 0.5, val) => curr_gain;
 }
 
-// mapping axis indices to axis functions
-/*fun void trakHub(float axis0, float axis1, float axis2, float axis3, float axis4, float axis5) {
-    LX(axis0);
-    LY(axis1);
-    LZ(axis2);
-    RX(axis3);
-    RY(axis4);
-    RZ(axis5);
-}*/
-
 fun void trakHub(float axes[]) {
-	LX(axes[0]);
+    LX(axes[0]);
     LY(axes[1]);
     LZ(axes[2]);
     RX(axes[3]);
@@ -158,7 +227,7 @@ fun void print()
         // values
         //<<< "axes:", gt.axis[0],gt.axis[1],gt.axis[2], gt.axis[3],gt.axis[4],gt.axis[5] >>>;
         //trakHub(gt.axis[0], gt.axis[1], gt.axis[2], gt.axis[3], gt.axis[4], gt.axis[5]);
-        trakHub(gt.axis)
+        trakHub(gt.axis);
         // advance time
         100::ms => now;
     }
@@ -205,13 +274,18 @@ fun void gametrak()
             // joystick button down
             else if( msg.isButtonDown() )
             {
-                <<< "button", msg.which, "down" >>>;
+                //<<< "button", msg.which, "down" >>>;
+                curr_mode++;
+                2 %=> curr_mode;
+                if (curr_mode == 1) {
+                    spork ~ accompany();
+                }
             }
             
             // joystick button up
             else if( msg.isButtonUp() )
             {
-                <<< "button", msg.which, "up" >>>;
+                //<<< "button", msg.which, "up" >>>;
             }
         }
     }
