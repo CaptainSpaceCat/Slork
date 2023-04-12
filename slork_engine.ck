@@ -21,6 +21,8 @@ for (int i; i < 5; i++) {
 2 => float distortion;
 0 => float curr_gain;
 0 => int curr_mode;
+0 => int curr_gen;
+int curr_bucket;
 
 100::ms => dur beat_length;
 0.5 => float bip_percent;
@@ -52,11 +54,14 @@ fun void accompany() {
         p * curr_gain => s_acc.gain;
         20::ms => now;
     }
-    while(mode == 1) {
+    while(curr_mode == 1) {
         o++;
         2 %=> o;
+        //scale_frequency(174.61, curr_bucket-3) => s_acc.freq;
         scale_frequency(155.56, o) => s_acc.freq;
-        for (int i; i < 100; i++) {
+        for (int i; i < 50; i++) {
+            0 => s_acc.gain;
+            20::ms => now;
             curr_gain => s_acc.gain;
             20::ms => now;
         }
@@ -70,14 +75,14 @@ fun void accompany() {
 }
 
 fun float scale_frequency(float base, int offset) {
-    [0, 2, 4, 5, 7, 9, 11, 12] @=> int deltas[];
+    [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23, 24] @=> int deltas[];
     //base 174.61
     return base*Math.pow(2, deltas[offset]/12.0);
 }
 
 
 // z axis deadzone
-0.05 => float DEADZONE;
+0.02 => float DEADZONE;
 
 // which joystick
 0 => int device;
@@ -121,16 +126,24 @@ spork ~ freq_follow();
 
 fun void freq_follow() {
     while (true) {
-        if (curr_freq < goal_freq) {
-            if (Math.random2(0, 3) == 0) {
-                3 +=> curr_freq;
-            }
+        curr_freq - goal_freq => float delta;
+        if (delta < 0) {
+            -delta => delta;
+        }
+        if (delta < 3) {
+            goal_freq => curr_freq;
         } else {
-            if (Math.random2(0, 1) == 0) {
-                3 -=> curr_freq;
+            if (curr_freq < goal_freq) {
+                if (Math.random2(0, 3) == 0) {
+                    2 +=> curr_freq;
+                }
+            } else {
+                if (Math.random2(0, 1) == 0) {
+                    2 -=> curr_freq;
+                }
             }
         }
-        50::ms => now;
+        5::ms => now;
     }
 }
 
@@ -163,11 +176,14 @@ fun int buckets(float d_min, float d_max, int n_buckets, float v) {
 
 // axis functions
 fun void LX(float val) { // distortion
-    lerp(-1, 1, 0, 30, val) => distortion;
+    if (curr_mode == 0) {
+        lerp(-1, 1, 0, 30, val) => distortion;
+    } else {
+        0 => distortion;
+    }
 }
-int curr_gen;
 fun void LY(float val) { // timbre clutch
-    if (val < 0.3) {
+    if (val < -0.5) {
         if (curr_gen != 0) {
             <<< "switching to s1" >>>;
             0 => curr_gen;
@@ -175,7 +191,7 @@ fun void LY(float val) { // timbre clutch
             s3 =< node;
             s1 => node;
         }
-    } else if (val < 0.6) {
+    } else if (val < 0.3) {
         if (curr_gen != 1) {
             <<< "switching to s2" >>>;
             1 => curr_gen;
@@ -193,10 +209,12 @@ fun void LY(float val) { // timbre clutch
 }
 fun void LZ(float val) { // pitch
     if (curr_mode == 0) {
-        lerp(-1, 1, 0, 600, val) => goal_freq;
+        lerp(0, 0.4, 0, 600, val) => goal_freq;
     } else {
-        scale_frequency(174.61, buckets(0, 0.5, 6, val)) => goal_freq;
+        buckets(0, 0.5, 10, val) => curr_bucket;
+        scale_frequency(174.61, curr_bucket) => goal_freq;
     }
+    <<<goal_freq, curr_freq>>>;
 }
 fun void RX(float val) { // bip percent
     lerp(-1, 1, -0.05, 1.05, val) => bip_percent;
@@ -206,7 +224,7 @@ fun void RY(float val) { // beat length
     lerp(-1, 1, 120, 1, val)::ms => beat_length;
 }
 fun void RZ(float val) {
-    lerp(0, 1, 0, 0.5, val) => curr_gain;
+    lerp(0, 1, 0, 2, val) => curr_gain;
 }
 
 fun void trakHub(float axes[]) {
@@ -274,11 +292,11 @@ fun void gametrak()
             // joystick button down
             else if( msg.isButtonDown() )
             {
-                //<<< "button", msg.which, "down" >>>;
+                <<< "button", msg.which, "down" >>>;
                 curr_mode++;
                 2 %=> curr_mode;
                 if (curr_mode == 1) {
-                    spork ~ accompany();
+                    //spork ~ accompany();
                 }
             }
             
