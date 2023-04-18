@@ -65,7 +65,7 @@ fun void blip(int chan) {
     pit => adsrs[chan];
     0 => buf.pos;
     adsrs[chan].keyOn();
-    Math.random2(0, 4)*50::ms => now;
+    Math.random2(1, 3)*30::ms => now;
     adsrs[chan].keyOff();
     10::ms => now;
     pit =< adsrs[chan];
@@ -100,7 +100,7 @@ fun void LZ(float val) {
 }
 fun void RX(float val) {
     56 => int base;
-    stringPull(0, 30, 0.15, val) => float offset;
+    stringPull(1, 3, 0.15, val) => float offset;
     offset => pit.shift;
     //Std.mtof(base - 5) - offset => t.freq;
     //Std.mtof(base) + offset => s.freq;
