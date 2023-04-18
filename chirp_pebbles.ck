@@ -56,7 +56,7 @@ spork ~ gametrak();
 spork ~ print();
 
 while (true) {
-    Math.random2(0, 5) => int c;
+    Math.random2(0, N_chans-1) => int c;
     blip(c);
 }
 
