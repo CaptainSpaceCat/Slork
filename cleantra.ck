@@ -1,3 +1,8 @@
+// =================================================
+// cleantra.ck
+// clean version of gametrak code
+// organized to make it easy to gametrackify your code
+// =================================================
 // constants
 2 => int N_chans;
 
