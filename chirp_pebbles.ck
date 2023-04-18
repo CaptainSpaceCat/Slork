@@ -1,7 +1,8 @@
 2 => int N_chans;
 
 me.dir() + "/resources/mixkit-bird-chirp.wav" => string filename;
-SndBuf buf;
+SndBuf buf => PitShift pit;
+1 => pit.mix;
 filename => buf.read;
 2 => buf.gain;
 
@@ -61,13 +62,13 @@ while (true) {
 }
 
 fun void blip(int chan) {
-    buf => adsrs[chan];
+    pit => adsrs[chan];
     0 => buf.pos;
     adsrs[chan].keyOn();
     Math.random2(0, 4)*50::ms => now;
     adsrs[chan].keyOff();
     10::ms => now;
-    buf =< adsrs[chan];
+    pit =< adsrs[chan];
 }
 
 fun float lerp(float d_min, float d_max, float r_min, float r_max, float v) {
@@ -100,6 +101,7 @@ fun void LZ(float val) {
 fun void RX(float val) {
     56 => int base;
     stringPull(0, 30, 0.15, val) => float offset;
+    offset => pit.shift;
     //Std.mtof(base - 5) - offset => t.freq;
     //Std.mtof(base) + offset => s.freq;
     //Std.mtof(base+7) + offset => s2.freq;
