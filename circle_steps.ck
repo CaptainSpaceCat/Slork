@@ -29,15 +29,19 @@ spork ~ gametrak();
 // print
 spork ~ print();
 
-SndBuf buf => LPF lpf => NRev rv => Gain g => dac;
+SndBuf buf => PitShift pit => LPF lpf => ADSR adsr => NRev rv => Gain g => dac;
+adsr.set(50::ms, 1000::ms, 0.1, 50::ms);
 0.2 => buf.gain;
 3200 => lpf.freq;
-0.2 => rv.mix;
-0 => g.gain;
+0.08 => rv.mix;
+3 => float base_gain;
+1 => pit.mix;
 me.dir() + "/resources/thunder.wav" => buf.read;
 
 0 => float walk_x => float walk_y;
 RingBuf ring;
+0 => int footstep_count;
+0 => int footstep_phase;
 
 //main loop
 while(true) {
@@ -75,8 +79,13 @@ fun void footstep() {
 }
 
 fun void footstep_sound() {
-    0 => buf.pos;
-    1 => g.gain;
+    [0, 30000] @=> int choices[];
+    Math.random2f(0,2) => int p;
+    choices[p $ int] => int c => buf.pos;
+    //<<<p, c>>>;
+    Math.random2f(0.9, 1.1) => pit.shift;
+    base_gain * Math.random2f(0.7, 1.3) => g.gain;
+    adsr.keyOn();
     1000::ms => now;
     0 => footstep_active;
 }
@@ -194,10 +203,7 @@ class RingBuf
         if (count < 10) {
             return 0.0;
         }
-        if (i == -1) {
-            return buffer[(9 + index) % 10];
-        }
-        return buffer[(i + index) % 10];
+        return buffer[(index + 9 - i) % 10];
     }
 }
 
