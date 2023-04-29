@@ -31,30 +31,46 @@ spork ~ print();
 //main loop
 30 => int LISA_MAX_VOICES;
 1::second => dur curr_pos;
-me.dir() + "resources/violin_c_scale.wav" => string FILENAME;
+me.dir() + "resources/scrape.wav" => string FILENAME;
 load( FILENAME ) @=> LiSa2 @ lisa => dac;
+1 => dac.gain;
 
 RingBuf dist;
-0 => int noteShift_active;
-[100000::samp, 300000::samp, 480000::samp, 600000::samp, 750000::samp] @=> dur note_map[];
+RingBuf distL;
+0 => int noteShift_active => int onShift_active;
+1 => int note_active;
+[100000::samp, 480000::samp, 300000::samp, 600000::samp, 750000::samp] @=> dur note_map[];
 -1 => int curr_note;
+2 => float curr_rate;
 
 // main loop
 while( true )
 {
     // random
-    Math.random2f( 0.99, 1.01 ) => float newrate;
+    Math.random2f( 0.99, 1.01 ) * curr_rate => float newrate;
     Math.random2f( 50, 500 )::ms => dur newdur;
 
     // spork grain
-    if (curr_note > -1) {
-        spork ~ getgrain( note_map[curr_note], newdur, 20::ms, 20::ms, newrate );
+    if (curr_note > -2) {
+        //note_map[curr_note]
+        spork ~ getgrain( curr_pos, newdur, 20::ms, 20::ms, newrate );
     }
 
     // note shift detection
     if (noteShift_active == 0 && Math.fabs(dist.read(0) - dist.read(2)) > 0.01) {
         1 => noteShift_active;
         spork ~ noteShift(dist.read(0) - dist.read(2));
+    }
+    
+    if (onShift_active == 0 && Math.fabs(distL.read(0) - distL.read(2)) > 0.01) {
+        1 => onShift_active;
+        spork ~ onShift(dist.read(0) - dist.read(2));
+    }
+    
+    if (note_active == 0) {
+        0 => dac.gain;
+    } else {
+        0.2 => dac.gain;
     }
     
     // advance time
@@ -66,8 +82,10 @@ while( true )
 fun void LX(float val) {
 }
 fun void LY(float val) {
+    lerp(-1, 1, 2, 5, val) => curr_rate;
 }
 fun void LZ(float val) {
+    //distL.add(val);
 }
 fun void RX(float val) {
 }
@@ -75,9 +93,9 @@ fun void RY(float val) {
 }
 fun void RZ(float val) {
     dist.add(val);
-    //lisa.duration() => dur l;
+    lisa.duration() => dur l;
     //<<<clamp(0, 1, lerp(0.05, 1, 0, 1, val)) * l>>>;
-    //clamp(0, 1, lerp(0.05, 1, 0, 1, val)) * l => curr_pos;
+    clamp(0, 1, lerp(0.05, 1, 0, 1, val)) * l => curr_pos;
 }
 
 fun void noteShift(float val) {
@@ -91,6 +109,22 @@ fun void noteShift(float val) {
     }
     500::ms => now;
     0 => noteShift_active;
+}
+
+fun void onShift(float val) {
+    if (val > 0) {
+        note_active++;
+    } else {
+        note_active--;
+    }
+    if (note_active < 0) {
+        0 => note_active;
+    }
+    if (note_active > 1) {
+        1 => note_active;
+    }
+    500::ms => now;
+    0 => onShift_active;
 }
 
 // ============================================ Gametrak Code ============================================
