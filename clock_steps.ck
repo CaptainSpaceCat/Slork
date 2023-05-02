@@ -153,8 +153,9 @@ class ClockTicker
 
 class FootstepTracker
 {
-    0 => float last_angle;
-    0 => int step_active;
+    0 => float last_angle => float curr_angle;
+    0 => float stable_angle;
+    0 => int step_active => int stabilizing;
     1000::ms => dur duration;
     
     public void set(dur d) {
@@ -162,17 +163,35 @@ class FootstepTracker
     }
     
     public void start() {
+        while (!(angle(walk_x, walk_y) >= 0)) {
+            10::ms => now;
+        }
+        angle(walk_x, walk_y) => curr_angle => last_angle => stable_angle;
         spork ~ trackerLoop();
     }
     
     private void trackerLoop() {
+        0 => int c_zeros;
         while (true) {
-            angle(walk_x, walk_y) => float curr_angle;
-            if (Math.fabs(curr_angle - last_angle) > 0.01) {
+            angle(walk_x, walk_y) => curr_angle;
+            <<<curr_angle, last_angle, stable_angle, stabilizing>>>;
+            if (Math.fabs(curr_angle - last_angle) < 0.01) {
+                c_zeros++;
+            } else {
+                0 => c_zeros;
+            }
+            
+            if (stabilizing == 0 && Math.fabs(curr_angle - stable_angle) > 0.12) {
+                1 => stabilizing;
                 stepOn();
             }
+            
+            if (stabilizing == 1 && c_zeros >= 5) {
+                curr_angle => stable_angle;
+                0 => stabilizing;
+            }
             curr_angle => last_angle;
-            10::ms => now;
+            100::ms => now;
         }
     }
     
