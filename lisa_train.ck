@@ -1,5 +1,5 @@
 // constants
-2 => int N_chans;
+6 => int N_chans;
 
 // z axis deadzone
 0.05 => float DEADZONE;
@@ -31,16 +31,9 @@ spork ~ print();
 //main loop
 30 => int LISA_MAX_VOICES;
 1::second => dur curr_pos;
-me.dir() + "resources/scrape.wav" => string FILENAME;
+me.dir() + "resources/bird_scream.wav" => string FILENAME;
 load( FILENAME ) @=> LiSa2 @ lisa => dac;
-1 => dac.gain;
-
-RingBuf dist;
-RingBuf distL;
-0 => int noteShift_active => int onShift_active;
-1 => int note_active;
-[100000::samp, 480000::samp, 300000::samp, 600000::samp, 750000::samp] @=> dur note_map[];
--1 => int curr_note;
+1 => float curr_gain;
 2 => float curr_rate;
 
 // main loop
@@ -48,83 +41,41 @@ while( true )
 {
     // random
     Math.random2f( 0.99, 1.01 ) * curr_rate => float newrate;
-    Math.random2f( 50, 500 )::ms => dur newdur;
-
-    // spork grain
-    if (curr_note > -2) {
-        //note_map[curr_note]
-        spork ~ getgrain( curr_pos, newdur, 20::ms, 20::ms, newrate );
-    }
-
-    // note shift detection
-    if (noteShift_active == 0 && Math.fabs(dist.read(0) - dist.read(2)) > 0.01) {
-        1 => noteShift_active;
-        spork ~ noteShift(dist.read(0) - dist.read(2));
-    }
+    Math.random2f( 100, 500 )::ms => dur newdur;
+    curr_pos + Math.random2(-200, 200)::ms => dur newpos;
+    //Math.random2f(0, 1) * lisa.duration() => dur newpos;
     
-    if (onShift_active == 0 && Math.fabs(distL.read(0) - distL.read(2)) > 0.01) {
-        1 => onShift_active;
-        spork ~ onShift(dist.read(0) - dist.read(2));
-    }
+    curr_gain => lisa.gain;
     
-    if (note_active == 0) {
-        0 => dac.gain;
-    } else {
-        0.2 => dac.gain;
-    }
+    spork ~ getgrain( newpos, newdur, 50::ms, 50::ms, newrate );
     
     // advance time
     10::ms => now;
 }
 
 
+//
+
 // axis functions
 fun void LX(float val) {
 }
 fun void LY(float val) {
-    lerp(-1, 1, 2, 5, val) => curr_rate;
+    lerp(-1, 1, 2, 3, val) => curr_rate;
 }
 fun void LZ(float val) {
-    //distL.add(val);
 }
 fun void RX(float val) {
 }
 fun void RY(float val) {
 }
 fun void RZ(float val) {
-    dist.add(val);
+    
     lisa.duration() => dur l;
-    //<<<clamp(0, 1, lerp(0.05, 1, 0, 1, val)) * l>>>;
-    clamp(0, 1, lerp(0.05, 1, 0, 1, val)) * l => curr_pos;
-}
-
-fun void noteShift(float val) {
-    if (val > 0) {
-        curr_note++;
-    } else {
-        curr_note--;
-    }
-    if (curr_note < -1 || curr_note >= note_map.cap()) {
-        -1 => curr_note;
-    }
-    500::ms => now;
-    0 => noteShift_active;
-}
-
-fun void onShift(float val) {
-    if (val > 0) {
-        note_active++;
-    } else {
-        note_active--;
-    }
-    if (note_active < 0) {
-        0 => note_active;
-    }
-    if (note_active > 1) {
-        1 => note_active;
-    }
-    500::ms => now;
-    0 => onShift_active;
+    lerp(0, 1, 275000, 525000, val)::samp => curr_pos;
+    //clamp(0, 1, lerp(0.05, 1, 0, 1, val)) * l => curr_pos;
+    
+    
+    clamp(0, 1, lerp(0, 0.05, 0, 1, val)) * 0.2 => curr_gain;
 }
 
 // ============================================ Gametrak Code ============================================
@@ -248,7 +199,7 @@ fun void getgrain( dur pos, dur grainlen, dur rampup, dur rampdown, float rate )
 {
     // get an available voice
     lisa.getVoice() => int newvoice;
-
+    
     // make sure we got a valid voice   
     if( newvoice > -1 )
     {
