@@ -46,7 +46,17 @@ for (int i; i < N_crickets; i++) {
 }
 
 MultiOsc mosc;
+Shakers shake => dac;
+0 => shake.preset;
 
+SndBuf clock_buf => Gain g => PitShift pit => LPF lpf => ADSR adsr => NRev rv => dac;
+adsr.set(50::ms, 1000::ms, 0.1, 50::ms);
+0.2 => clock_buf.gain;
+3200 => lpf.freq;
+0.08 => rv.mix;
+5 => float base_gain;
+1 => pit.mix;
+me.dir() + "/resources/thunder.wav" => clock_buf.read;
 
 tracker.start();
 //main loop
@@ -71,24 +81,27 @@ fun void RZ(float val) {
 }
 
 
-fun void clockMeasure(dur d) {
+fun void clockMeasure(dur d, int r) {
     [0, 2, 4, 6] @=> int offsets[];
     
     //bell
-    mosc.play();
-    d/4 => now;
-    mosc.stop();
+    //mosc.play();
+    [0, 30000] @=> int choices[];
+    Math.random2f(0,2) => float p;
+    choices[p $ int] => int c => clock_buf.pos;
+    //Math.random2f(0.9, 1.1) => pit.shift;
+    base_gain * Math.random2f(0.7, 1.3) => g.gain;
+    adsr.keyOn();
     
-    for (int c; c < 3; c++) {
-        for (int i; i < N_crickets; i++) {
-            cricks[i].set_freq(Std.mtof(110 + offsets[Math.random2(0, 3)]));
-            cricks[i].play(i % 2);
-        }
-        d/8 => now;
-        for (int i; i < N_crickets; i++) {
-            cricks[i].stop();
-        }
-        d/8 => now;
+    for (int c; c < 4; c++) {
+        220 * (c%2+1) => shake.freq;
+        shake.noteOn(3);
+        d/4 => now;
+        mosc.stop();
+    }
+    
+    if (r > 0) {
+        clockMeasure(d, r-1);
     }
 }
 
@@ -125,12 +138,12 @@ class ClockTicker
     3 => int beats;
     
     public void setNextTick() {
-        now - lastTick - 50::ms => length;
+        now - lastTick - 20::ms => length;
         if (length > 4::second) {
             4::second => length;
         }
         //spork ~ tickSounds();
-        spork ~ clockMeasure(length);
+        spork ~ clockMeasure(length, 0);
         now => lastTick;
     }
     
@@ -174,7 +187,7 @@ class FootstepTracker
         0 => int c_zeros;
         while (true) {
             angle(walk_x, walk_y) => curr_angle;
-            <<<curr_angle, last_angle, stable_angle, stabilizing>>>;
+            //<<<curr_angle, last_angle, stable_angle, stabilizing>>>;
             if (Math.fabs(curr_angle - last_angle) < 0.01) {
                 c_zeros++;
             } else {
