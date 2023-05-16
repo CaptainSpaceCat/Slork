@@ -1,38 +1,47 @@
 const canvas = document.getElementById("canvas");
 const svg = document.getElementById("svg");
-svg.setAttribute("width", "1000");
-svg.setAttribute("height", "1000");
+//svg.setAttribute("width", "1000");
+//svg.setAttribute("height", "1000");
 const context = canvas.getContext("2d");
 
 Y = 0;
-const NOTES = [0, 1, .3, .6, .2];
-const DURS  = [5, 3,  2,  7,  2];
-const SLURS = [0, 1, 1, 1, 0];
-const WIN   = 100;
-let prev = 0;
+const NOTES = [0, 1, .3, .6, .2, .15, .2, .15, .5];
+const DURS  = [5, 3,  2,  7,  1, 1, 1, 1, 3];
+const SLURS = [0, 0, 0, 0, 1, 1, 1, 0, 0];
+const WIN_NOTES = 12;
+const BPS = 1;
+let startTime = 0;
 function draw(time) {
-    if (prev == 0) {
-        prev = time;
+    if (startTime == 0) {
+        startTime = time;
     }
-    pos = (time - prev) / 1000
+    pos = (time - startTime) / 1000 //pos is how far along the song we have gotten
+    let curr_beat = pos/BPS; // seconds elapsed / beats per second = beats elapsed
     const width = canvas.width = window.innerWidth;
     const height = canvas.height = window.innerHeight;
     context.fillStyle = "black";
-    //context.fillRect(0, 0, width, height);
-    let so_far = 0;
+    context.fillRect(0, 0, width, height);
+    let so_far = 0;  //how far are we along the current render
     let drawn = 0;
     for (let i = 0; i < NOTES.length; i++) {
         so_far += DURS[i];
         if (so_far >= pos) {
-            let dur = DURS[i];
+            let dur = DURS[i] * .9;
             if (so_far - DURS[i] < pos) {
                 dur = so_far - pos;
             }
             const x = (drawn / WIN) * (width - 90) + 90;
             const y = NOTES[i] * (height - 20) + 10;
             const rect_width = (dur / WIN) * (width - 90)
-            context.fillStyle = "blue";
-            context.fillRect(x, y - 10, rect_width, 20);
+            //context.fillStyle = "blue";
+            //context.fillRect(x, y - 10, rect_width, 20);
+
+            context.beginPath();
+            context.moveTo(x, y-10);
+            context.lineTo(x + rect_width, y-10);
+            context.strokeStyle = "blue";
+            context.lineWidth = 10;
+            context.stroke();
             drawn += dur;
         }
     }
@@ -72,16 +81,6 @@ function renderNote() {
 function noteToPos(note) {
     return note * (height - 20) + 10;
 }
-
-// Create the hourglass shape
-const hourglass = document.createElementNS("http://www.w3.org/2000/svg", "path");
-hourglass.setAttribute("d", "M 50 0 L 150 0 L 50 200 L 150 200 Z");
-hourglass.setAttribute("fill", "none");
-hourglass.setAttribute("stroke", "green");
-hourglass.setAttribute("stroke-width", "2");
-
-// Append the hourglass shape to the SVG container
-svg.appendChild(hourglass);
 
 document.body.onclick = function() {
     canvas.requestFullscreen();
